@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 
 public class SceneSwitcher : MonoBehaviour
 {
+    //APAGNAN CRAMPTE
     public SpriteRenderer transitionImage; // Référence au SpriteRenderer de l'image PNG
     public float fadeDuration = 1f; // Durée du fondu (en secondes)
     public string nextSceneName; // Nom de la scène à charger après la transition
@@ -26,6 +27,7 @@ public class SceneSwitcher : MonoBehaviour
 
     private void Update()
     {
+        Debug.Log("Pov : tu fais un apagnan en cours de gameprog dans le terminal : APAGNAAAAAAN");
         // Lorsque l'utilisateur appuie sur la touche Espace
         if (Input.GetKeyDown(KeyCode.Space))
         {
