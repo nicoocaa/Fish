@@ -1,13 +1,26 @@
 ﻿using UnityEngine;
+using System.Collections;
 
 public class FishMovement : MonoBehaviour
 {
-    public float minSpeed = 1f;  // Vitesse minimale
-    public float maxSpeed = 3f;  // Vitesse maximale
-    public float changeDirectionTime = 3f; // Temps avant de changer de direction
-    public float rotationSpeed = 5f;  // Vitesse de rotation du poisson
-    public float accelerationRate = 2f;  // Taux d'accélération/décélération
-    public float catchRadius = 0.5f;  // Rayon dans lequel le poisson peut être attrapé
+    [Header("Mouvement")]
+    public float minSpeed = 0.3f;
+    public float maxSpeed = 0.8f;
+    public float changeDirectionTime = 3f;
+    public float rotationSpeed = 2f;
+    public float accelerationRate = 1f;
+    
+    [Header("Comportement")]
+    public float catchRadius = 0.8f;
+    public float panicSpeed = 0.6f;
+    public float panicDuration = 1f;
+    public float detectionRadius = 1f;
+    public float panicChance = 0.5f;
+    
+    [Header("Effets Visuels")]
+    public Color normalColor = Color.white;
+    public Color panicColor = Color.red;
+    public float colorTransitionSpeed = 5f;
 
     private Vector3 moveDirection;
     private float currentSpeed;
@@ -18,18 +31,22 @@ public class FishMovement : MonoBehaviour
     private float screenHeight;
     private SpriteRenderer spriteRenderer;
     private bool isBeingCaught = false;
+    private bool isPanicked = false;
+    private float panicTimer = 0f;
+    private Vector3 lastMousePosition;
 
     void Start()
     {
         mainCamera = Camera.main;
         spriteRenderer = GetComponent<SpriteRenderer>();
+        spriteRenderer.color = normalColor;
         CalculateScreenBounds();
         ChangeDirection();
+        lastMousePosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
     }
 
     void CalculateScreenBounds()
     {
-        // Convertir les dimensions de l'écran en unités monde
         float cameraHeight = 2f * mainCamera.orthographicSize;
         float cameraWidth = cameraHeight * mainCamera.aspect;
         screenWidth = cameraWidth;
@@ -40,28 +57,88 @@ public class FishMovement : MonoBehaviour
     {
         if (!isBeingCaught)
         {
-            // Comportement normal du poisson
-            currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * accelerationRate);
-            
-            Quaternion targetRotation = Quaternion.LookRotation(Vector3.forward, moveDirection);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
-            
-            transform.position += moveDirection * currentSpeed * Time.deltaTime;
-            WrapAroundScreen();
+            Vector3 mousePosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+            mousePosition.z = transform.position.z;
+            float distanceToMouse = Vector2.Distance(transform.position, mousePosition);
 
-            timer += Time.deltaTime;
-            if (timer >= changeDirectionTime)
+            float mouseSpeed = Vector3.Distance(mousePosition, lastMousePosition) / Time.deltaTime;
+            bool isMouseMovingFast = mouseSpeed > 15f;
+
+            if (distanceToMouse < detectionRadius && isMouseMovingFast && !isPanicked)
             {
-                ChangeDirection();
-                timer = 0;
+                if (Random.value < panicChance)
+                {
+                    StartPanic(mousePosition);
+                }
             }
 
-            // Vérifier si le poisson est cliqué
+            if (isPanicked)
+            {
+                HandlePanicBehavior();
+            }
+            else
+            {
+                NormalBehavior();
+            }
+
+            spriteRenderer.color = Color.Lerp(spriteRenderer.color, 
+                isPanicked ? panicColor : normalColor, 
+                Time.deltaTime * colorTransitionSpeed);
+
             if (Input.GetMouseButtonDown(0))
             {
                 CheckIfCaught();
             }
+
+            lastMousePosition = mousePosition;
         }
+    }
+
+    void NormalBehavior()
+    {
+        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * accelerationRate);
+        
+        Quaternion targetRotation = Quaternion.LookRotation(Vector3.forward, moveDirection);
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
+        
+        transform.position += moveDirection * currentSpeed * Time.deltaTime;
+        WrapAroundScreen();
+
+        timer += Time.deltaTime;
+        if (timer >= changeDirectionTime)
+        {
+            ChangeDirection();
+            timer = 0;
+        }
+    }
+
+    void StartPanic(Vector3 mousePosition)
+    {
+        isPanicked = true;
+        panicTimer = 0f;
+        Vector3 awayFromMouse = (transform.position - mousePosition).normalized;
+        moveDirection = awayFromMouse;
+        currentSpeed = panicSpeed;
+    }
+
+    void HandlePanicBehavior()
+    {
+        panicTimer += Time.deltaTime;
+        if (panicTimer >= panicDuration)
+        {
+            isPanicked = false;
+            ChangeDirection();
+            return;
+        }
+
+        moveDirection += new Vector3(
+            Random.Range(-0.02f, 0.02f),
+            Random.Range(-0.02f, 0.02f),
+            0
+        ).normalized;
+
+        transform.position += moveDirection * panicSpeed * Time.deltaTime;
+        WrapAroundScreen();
     }
 
     void WrapAroundScreen()
@@ -87,7 +164,6 @@ public class FishMovement : MonoBehaviour
         targetSpeed = Random.Range(minSpeed, maxSpeed);
         moveDirection = new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0).normalized;
 
-        // Retourner le sprite en fonction de la direction
         if (moveDirection.x < 0)
             transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
         else
@@ -108,13 +184,32 @@ public class FishMovement : MonoBehaviour
 
     void CatchFish()
     {
+        if (isPanicked)
+        {
+            if (Random.value > 0.6f) return;
+        }
+
         isBeingCaught = true;
-        // Vous pouvez ajouter ici un effet visuel, un son, etc.
+        spriteRenderer.color = Color.green;
         Debug.Log("Poisson attrapé !");
         
-        // Optionnel : Ajouter un score ou autre logique de jeu
-        
-        // Détruire le poisson après un court délai
-        Destroy(gameObject, 0.5f);
+        StartCoroutine(CatchAnimation());
+    }
+
+    System.Collections.IEnumerator CatchAnimation()
+    {
+        Vector3 originalScale = transform.localScale;
+        float elapsed = 0f;
+        float duration = 0.5f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, t);
+            yield return null;
+        }
+
+        Destroy(gameObject);
     }
 }
