@@ -154,9 +154,20 @@ public class FishMovement : MonoBehaviour
     {
         return GameObject.FindGameObjectsWithTag("Fish").Length == 0;
     }
+    
+    public void AddTime(float timeToAdd)
+    {
+        gameTime += timeToAdd;
+    }
+
 
     void UpdateScoreText()
     {
         // Implémentation de la mise à jour du texte du score
     }
+    public float GetGameTime()
+    {
+        return gameTime;
+    }
+
 }
