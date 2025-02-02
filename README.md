@@ -1,4 +1,4 @@
-# 🎣 Jeu de Pêche - GameProg 2
+# 🎣 Jeu de Pêche - GameProg
 
 ## 📖 Présentation
 
