@@ -1,5 +1,5 @@
 ﻿using UnityEngine;
-using System.Collections;
+using UnityEngine.SceneManagement;
 
 public class FishMovement : MonoBehaviour
 {
@@ -12,14 +12,10 @@ public class FishMovement : MonoBehaviour
     
     [Header("Comportement")]
     public float catchRadius = 0.8f;
-    public float panicSpeed = 0.6f;
-    public float panicDuration = 1f;
-    public float detectionRadius = 1f;
-    public float panicChance = 0.5f;
-    
+
     [Header("Effets Visuels")]
     public Color normalColor = Color.white;
-    public Color panicColor = Color.red;
+    public Color caughtColor = Color.green;
     public float colorTransitionSpeed = 5f;
 
     private Vector3 moveDirection;
@@ -27,70 +23,42 @@ public class FishMovement : MonoBehaviour
     private float targetSpeed;
     private float timer;
     private Camera mainCamera;
-    private float screenWidth;
-    private float screenHeight;
     private SpriteRenderer spriteRenderer;
     private bool isBeingCaught = false;
-    private bool isPanicked = false;
-    private float panicTimer = 0f;
-    private Vector3 lastMousePosition;
+
+    private static int caughtFishCount = 0; // Variable pour compter les poissons attrapés
+    private float gameTime = 5f; // Temps limite en secondes pour attraper les poissons
 
     void Start()
     {
         mainCamera = Camera.main;
         spriteRenderer = GetComponent<SpriteRenderer>();
         spriteRenderer.color = normalColor;
-        CalculateScreenBounds();
         ChangeDirection();
-        lastMousePosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
-    }
-
-    void CalculateScreenBounds()
-    {
-        float cameraHeight = 2f * mainCamera.orthographicSize;
-        float cameraWidth = cameraHeight * mainCamera.aspect;
-        screenWidth = cameraWidth;
-        screenHeight = cameraHeight;
     }
 
     void Update()
     {
+        // Réduit le temps restant
+        gameTime -= Time.deltaTime;
+
+        // Si le temps est écoulé ou si tous les poissons sont attrapés, on change de scène
+        if (gameTime <= 0 || AllFishCaught())
+        {
+            // Changer de scène
+            SceneManager.LoadScene("SampleScene");  // Remplacer "NextScene" par le nom de la scène suivante
+            ScoreManager.SetScore(caughtFishCount);  // Enregistrer le score
+            return;
+        }
+
         if (!isBeingCaught)
         {
-            Vector3 mousePosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
-            mousePosition.z = transform.position.z;
-            float distanceToMouse = Vector2.Distance(transform.position, mousePosition);
-
-            float mouseSpeed = Vector3.Distance(mousePosition, lastMousePosition) / Time.deltaTime;
-            bool isMouseMovingFast = mouseSpeed > 15f;
-
-            if (distanceToMouse < detectionRadius && isMouseMovingFast && !isPanicked)
-            {
-                if (Random.value < panicChance)
-                {
-                    StartPanic(mousePosition);
-                }
-            }
-
-            if (isPanicked)
-            {
-                HandlePanicBehavior();
-            }
-            else
-            {
-                NormalBehavior();
-            }
-
-            spriteRenderer.color = Color.Lerp(spriteRenderer.color, 
-                isPanicked ? panicColor : normalColor, 
-                Time.deltaTime * colorTransitionSpeed);
+            NormalBehavior();
 
             if (Input.GetMouseButtonDown(0))
             {
                 CheckIfCaught();
             }
-
-            lastMousePosition = mousePosition;
         }
     }
 
@@ -110,35 +78,6 @@ public class FishMovement : MonoBehaviour
             ChangeDirection();
             timer = 0;
         }
-    }
-
-    void StartPanic(Vector3 mousePosition)
-    {
-        isPanicked = true;
-        panicTimer = 0f;
-        Vector3 awayFromMouse = (transform.position - mousePosition).normalized;
-        moveDirection = awayFromMouse;
-        currentSpeed = panicSpeed;
-    }
-
-    void HandlePanicBehavior()
-    {
-        panicTimer += Time.deltaTime;
-        if (panicTimer >= panicDuration)
-        {
-            isPanicked = false;
-            ChangeDirection();
-            return;
-        }
-
-        moveDirection += new Vector3(
-            Random.Range(-0.02f, 0.02f),
-            Random.Range(-0.02f, 0.02f),
-            0
-        ).normalized;
-
-        transform.position += moveDirection * panicSpeed * Time.deltaTime;
-        WrapAroundScreen();
     }
 
     void WrapAroundScreen()
@@ -172,26 +111,23 @@ public class FishMovement : MonoBehaviour
 
     void CheckIfCaught()
     {
-        Vector3 mousePosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+        Vector3 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
         mousePosition.z = transform.position.z;
         float distance = Vector2.Distance(transform.position, mousePosition);
 
         if (distance <= catchRadius)
         {
             CatchFish();
+            ScoreManager.AddScore(2); // Ajoute 2 au score pour chaque poisson attrapé
+            UpdateScoreText(); // Mettez à jour le texte du score après l'ajout
         }
     }
 
     void CatchFish()
     {
-        if (isPanicked)
-        {
-            if (Random.value > 0.6f) return;
-        }
-
         isBeingCaught = true;
-        spriteRenderer.color = Color.green;
-        Debug.Log("Poisson attrapé !");
+        spriteRenderer.color = caughtColor;
+        caughtFishCount++;  // Incrémente le compteur de poissons attrapés
         
         StartCoroutine(CatchAnimation());
     }
@@ -211,5 +147,16 @@ public class FishMovement : MonoBehaviour
         }
 
         Destroy(gameObject);
+    }
+
+    // Fonction qui vérifie si tous les poissons ont été attrapés
+    bool AllFishCaught()
+    {
+        return GameObject.FindGameObjectsWithTag("Fish").Length == 0;
+    }
+
+    void UpdateScoreText()
+    {
+        // Implémentation de la mise à jour du texte du score
     }
 }
